@@ -1,0 +1,20 @@
+---
+// index.astro — 자동 변환: WordPress index.php → Astro 페이지
+import Layout from '../layouts/Layout.astro';
+let posts: any[] = [];
+try {
+  const res = await fetch('https://cp-aa546fb2-wp.choichoi3227.workers.dev/wp-json/wp/v2/posts?per_page=10&_embed');
+  if (res.ok) posts = await res.json();
+} catch {}
+---
+<Layout title="인포팡팡">
+  <div class="wp-posts-list">
+    {posts.length > 0 ? posts.map((post: any) => (
+      <article class="wp-post" key={post.id}>
+        <h2><a href={'/post/' + post.slug} set:html={post.title.rendered} /></h2>
+        <div class="wp-post-excerpt" set:html={post.excerpt.rendered} />
+        <a href={'/post/' + post.slug}>더 읽기 →</a>
+      </article>
+    )) : <p>게시물이 없습니다.</p>}
+  </div>
+</Layout>

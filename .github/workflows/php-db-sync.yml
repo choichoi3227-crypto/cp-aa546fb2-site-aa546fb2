@@ -1,0 +1,77 @@
+name: WordPress DB · PHP 동기화
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '_db/**'
+      - 'wordpress/wp-content/db.php'
+      - 'wp-transform.ts'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: PHP 환경 설정 (공식 setup-php)
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: mbstring, json, curl, pdo, pdo_sqlite, sqlite3
+          ini-values: memory_limit=256M
+          coverage: none
+
+      - name: wordpress.db · db.php 검증
+        run: |
+          echo "📋 DB/db.php 상태"
+          if [ -f "_db/wordpress.db" ]; then
+            SIZE=$(wc -c < _db/wordpress.db)
+            echo "✅ _db/wordpress.db (${SIZE} bytes)"
+            cat > /tmp/check_db.php << 'PHPEOF'
+<?php
+$raw = file_get_contents('_db/wordpress.db');
+$data = json_decode($raw, true);
+if ($data && isset($data['options'])) {
+  echo '  형식: CloudPress JSON 시드' . PHP_EOL;
+  echo '  옵션: ' . count($data['options']) . PHP_EOL;
+} elseif ($raw !== '' && $raw[0] !== '{') {
+  echo '  형식: SQLite 바이너리' . PHP_EOL;
+  $pdo = new PDO('sqlite:_db/wordpress.db');
+  $tables = $pdo->query("SELECT name FROM sqlite_master WHERE type='table'")->fetchAll();
+  echo '  테이블: ' . count($tables) . PHP_EOL;
+}
+PHPEOF
+            php /tmp/check_db.php || true
+          else
+            echo "⚠️ _db/wordpress.db 없음"
+          fi
+          if [ -f "wordpress/wp-content/db.php" ]; then
+            echo "✅ wordpress/wp-content/db.php"
+          else
+            echo "❌ db.php 없음"
+            exit 1
+          fi
+
+      - name: JSON 시드 → SQLite 병합 (선택)
+        run: |
+          if [ ! -f "_db/wordpress.db" ]; then exit 0; fi
+          cat > /tmp/merge_db.php << 'PHPEOF'
+<?php
+$raw = @file_get_contents('_db/wordpress.db');
+$data = json_decode($raw ?: '', true);
+if (!$data || empty($data['options'])) { echo 'JSON 시드 아님 — 건너뜀' . PHP_EOL; exit(0); }
+$pdo = new PDO('sqlite:_db/wordpress.sqlite');
+$pdo->exec('PRAGMA journal_mode=WAL');
+$pdo->exec('CREATE TABLE IF NOT EXISTS wp_options (option_id INTEGER PRIMARY KEY AUTOINCREMENT, option_name TEXT UNIQUE, option_value TEXT, autoload TEXT DEFAULT yes)');
+$st = $pdo->prepare('INSERT OR REPLACE INTO wp_options (option_name, option_value, autoload) VALUES (?,?,?)');
+foreach ($data['options'] ?? [] as $o) { $st->execute([$o['option_name'], $o['option_value'], $o['autoload'] ?? 'yes']); }
+echo '✅ wordpress.sqlite 병합 완료' . PHP_EOL;
+PHPEOF
+          php /tmp/merge_db.php

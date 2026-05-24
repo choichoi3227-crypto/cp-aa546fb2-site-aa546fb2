@@ -1,0 +1,25 @@
+---
+// Layout.astro — 자동 변환: WordPress header.php + footer.php → Astro Layout
+export interface Props { title: string; description?: string; }
+const { title, description = '' } = Astro.props;
+---
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>{title}</title>
+  {description && <meta name="description" content={description} />}
+  <link rel="stylesheet" href="/wp-content/themes/twentytwentyfour/style.css" />
+</head>
+<body>
+  <header id="site-header">
+    <a href="/" class="site-title">인포팡팡</a>
+    <nav><slot name="navigation" /></nav>
+  </header>
+  <main id="primary"><slot /></main>
+  <footer id="site-footer">
+    <p>&copy; {new Date().getFullYear()} 인포팡팡. Powered by <a href="https://cloud-press.co.kr">CloudPress</a>.</p>
+  </footer>
+</body>
+</html>

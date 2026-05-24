@@ -1,0 +1,18 @@
+---
+// [slug].astro — 자동 변환: WordPress single.php → Astro 동적 라우트
+import Layout from '../../layouts/Layout.astro';
+export async function getStaticPaths() {
+  try {
+    const res = await fetch('https://cp-aa546fb2-wp.choichoi3227.workers.dev/wp-json/wp/v2/posts?per_page=100&_embed');
+    const posts = res.ok ? await res.json() : [];
+    return posts.map((post: any) => ({ params: { slug: post.slug }, props: { post } }));
+  } catch { return []; }
+}
+const { post } = Astro.props;
+---
+<Layout title={post?.title?.rendered ?? '포스트'}>
+  <article>
+    <h1 set:html={post?.title?.rendered} />
+    <div set:html={post?.content?.rendered} />
+  </article>
+</Layout>
